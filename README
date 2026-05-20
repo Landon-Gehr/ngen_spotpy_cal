@@ -1,0 +1,7 @@
+1) use "uvx ngiab-prep -i gage-09081600 --start 2008-10-01 --end 2012-09-30 -sfr --source aorc --output_root data" to create ne directory in "data"
+    should have config (cat_config),forcings,metadata,outputs
+    can optionally delete metadata and outputs and realization.json,troute.yaml
+    create crosswalk.json and ngen_cal_conf.yaml in the config folder and update them accordingly
+        in ngen_cal_conf: add path to observed_data, forcings.nc, subset.gpkg (or take from /beegfs/sets/aw-ciroh/common/gis/hydrofabrics/conus/camels/individ_basins/)
+        
+uvx ngiab-prep -i cat-3313417 --start 2008-10-01 --end 2012-09-30 -sfr --source aorc --output_root data/11264500

@@ -1,0 +1,19 @@
+singularity_image_path: /home/lsgehr/scratch/NextGen/NGIAB-HPCInfra/singularity_ngen/ngen.sif
+run_dir: /home/lsgehr/scratch/NextGen/spotpy_cal/scripts/single_run
+data_config_dir: /home/lsgehr/scratch/NextGen/spotpy_cal/data/11264500/cat-3313417/config
+gpkg_file_path: /home/lsgehr/scratch/NextGen/spotpy_cal/data/11264500/cat-3313417/config/cat-3313417_subset.gpkg
+forcings_file_path: /home/lsgehr/scratch/NextGen/spotpy_cal/data/11264500/cat-3313417/forcings/forcings.nc
+observed_flow_path: /home/lsgehr/scratch/NextGen/spotpy_cal/data/11264500/cat-3313417/config/obs_hourly_discharge_cms.csv
+template_realization: /home/lsgehr/scratch/NextGen/spotpy_cal/scripts/realization_template.json
+template_routing: /home/lsgehr/scratch/NextGen/spotpy_cal/scripts/troute_template.yaml
+runscript_path: /home/lsgehr/scratch/NextGen/spotpy_cal/scripts/ngen_image_runscript.sh
+params_json: /home/lsgehr/scratch/NextGen/spotpy_cal/scripts/run_ngen_params.json
+start_date: "2008-10-01 00:00:00"
+eval_start_date: "2009-10-01 00:00:00"
+end_date: "2010-09-30 00:00:00"
+bind: /scratch/lsgehr:/scratch/lsgehr
+gage_id: 11264500
+site_name: "Merced River"
+feature_id: 3313417
+stream_output_frequency: 15
+sim_verbosity: debug

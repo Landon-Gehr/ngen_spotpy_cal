@@ -1,0 +1,30 @@
+# Ignore all contents in these directories
+scripts/testing/
+scripts/single_run/
+scripts/figures/
+scripts/script_outputs/
+sites/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Environment files
+.env
