@@ -60,8 +60,8 @@ def ngiab_data_retrieval(site,start,end,save_dir,tries=1):
 
 def obs_data_retrieval(gage_num, start_dt, end_dt, save=True, save_as=None):
     site = gage_num
-    start = start_dt.strftime("%Y-%m-%dT%H:%M")
-    end = end_dt.strftime("%Y-%m-%dT%H:%M")
+    start = (start_dt - pd.Timedelta(hours=14)).strftime("%Y-%m-%dT%H:%M")
+    end = (end_dt   + pd.Timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M")
 
     # official USGS timezone offsets, offsets from UTC: https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-zone-codes/items?limit=100
     tz_offsets = {
@@ -182,6 +182,7 @@ def obs_data_retrieval(gage_num, start_dt, end_dt, save=True, save_as=None):
         utc=True
     ).dt.tz_localize(None)
 
+    df = df[(df["value_date"] >= start_dt) & (df["value_date"] <= end_dt)]
     df["obs_flow"] = pd.to_numeric(df[flow_col],errors="coerce")
     df["obs_flow"] = df["obs_flow"] / 35.3146667215
     df = df[["value_date", "obs_flow"]]

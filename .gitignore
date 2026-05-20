@@ -1,5 +1,6 @@
 # Ignore all contents in these directories
 scripts/testing/
+scripts/tmp/
 scripts/single_run/
 scripts/figures/
 scripts/script_outputs/

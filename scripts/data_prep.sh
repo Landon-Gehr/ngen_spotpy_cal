@@ -8,13 +8,10 @@
 
 
 module purge
-module load compilers/gcc/12.2.1
-module load mpi/openmpi/gcc/4.1.6
-
 . ~/.conda/.conda_init
 conda activate ngen_mpi
 
-gage_id="11264500"
+gage_id="14305500"
 start_dt="2008-10-01 00:00:00"
 end_dt="2012-09-30 00:00:00"
 

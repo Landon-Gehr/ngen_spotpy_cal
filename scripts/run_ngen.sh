@@ -14,6 +14,6 @@ module load mpi/openmpi/gcc/4.1.6
 . ~/.conda/.conda_init
 conda activate ngen_mpi
 
-run_config_path="/home/lsgehr/scratch/NextGen/spotpy_cal/scripts/run_ngen_conf.yaml"
+run_config_path="/home/lsgehr/scratch/NextGen/spotpy_cal/sites/11264500/cat-3313417/run_ngen_conf.yaml"
 
 python run_ngen.py --run-config-path=$run_config_path

@@ -99,244 +99,101 @@ def parse_args():
  
     # Positional (required) arguments
     parser.add_argument("calibration_conf",       type=str, help="location of calibration config yaml")
-    parser.add_argument("singularity_image_path", type=str, help="Singularity image path with compiled ngen binary")
     args, _ = parser.parse_known_args()
 
     defaults = yaml.safe_load(open(args.calibration_conf, 'r'))
-    crosswalk = json.load(open(defaults["model"]["crosswalk"],"r"))
+    crosswalk = defaults["model"].get("crosswalk",None)
+    feature_id = None
+    gage_id = None
+    if check_path(crosswalk):
+        crosswalk = json.load(open(crosswalk,"r"))
+        feature_id = int(((list(crosswalk.keys())[0]).split("-"))[1])
+        gage_id = crosswalk[list(crosswalk.keys())[0]]["Gage_no"]    
 
-    reps = defaults["general"]["iterations"]
-    root_data_path = defaults["general"]["workdir"]
-    model_binary = defaults["model"]["binary"]
-    realization_template = defaults["model"]["realization"]
-    routing_template = defaults["model"]["troute"]
-    gpkg_file = defaults["model"]["catchments"]
-    observed_flow = defaults["model"]["obsflow"]
+    path_args = [
+        {"name": "gpkg-file-path",        "type": str, "default":defaults["model"].get("gpkg", None), "help": "Path to gpkg file with catchment and nexus data (default: read by conf file)"},
+        {"name": "observed-flow-path",    "type": str, "default":defaults["model"].get("obsflow", None), "help": "Path to observed flow data (default: read by conf file)"},
+        {"name": "template-realization",  "type": str, "default":defaults["model"].get("realization", None), "help": "Path to realization template JSON (default: read by conf file)"},
+        {"name": "template-routing",      "type": str, "default":defaults["model"].get("troute", None), "help": "Path to routing template YAML (default: read by conf file)"},
+        {"name": "data-config-path",      "type": str, "default":defaults["model"].get("config", None), "help": "Path to directory containing /cat_config with CFE and NOAH-OWP-M (default: read by conf file)"},
+        {"name": "data-forcing-path",     "type": str, "default":defaults["model"].get("forcing", None), "help": "Path to aorc forcings nc file (default: read by conf file)"},
+        {"name": "workdir-path",          "type": str, "default":defaults["general"].get("workdir", None), "help": "Path to use as working directory (default: read by conf file)"},
+        {"name": "singularity-image-path","type": str, "default":defaults["general"].get("image", None), "help": "Path to Singularity image path with compiled ngen binary (default: read by conf file)"},
+    ]
 
-    feature_id = int(((list(crosswalk.keys())[0]).split("-"))[1])
-    gage_id = crosswalk[list(crosswalk.keys())[0]]["Gage_no"]
+    non_path_args = [
+        {"name": "feature-id",      "type": int, "default":defaults["model"]["eval_params"].get("featureID",feature_id), "help": "Feature id to be used for flow evaluation (default: read by crosswalk file)"},
+        {"name": "gage-id",         "type": int, "default":defaults["model"]["eval_params"].get("basinID",gage_id), "help": "Gage ID (default: read by crosswalk file)"},
+        {"name": "start-time",      "type": str, "default":defaults["model"]["eval_params"].get("start_time",None), "help": "date to start simulation (default: read by conf file)"},
+        {"name": "end-time",        "type": str, "default":defaults["model"]["eval_params"].get("end_time",None), "help": "date to stop simulation (default: read by conf file)"},
+        {"name": "eval-start-time", "type": str, "default":defaults["model"]["eval_params"].get("eval_start_time",None), "help": "date to start evaluation (default: read by conf file)"},
+        {"name": "eval-end-time",   "type": str, "default":defaults["model"]["eval_params"].get("eval_end_time",None), "help": "date to stop evaluation (default: read by conf file)"},
+        {"name": "sampling-reps",   "type": int, "default":defaults["general"].get("iterations",None), "help": "Number of sampling repetitions (default: read by conf file)"},
+    ]
 
-    parser.add_argument(
-        "--root-data-path",
-        type=str,
-        default=root_data_path,
-        dest="root_data_path",
-        help=("Path to directory containing /config and /forcings (default: read by conf file)"
-        ),
-    )
-    parser.add_argument(
-        "--feature-id",
-        type=int,
-        default=feature_id,
-        dest="feature_id",
-        help=("Feature id to be used for flow evaluation (default: read by crosswalk file)"
-        ),
-    )
-    parser.add_argument(
-        "--gpkg-file-path",
-        type=str,
-        default=gpkg_file,
-        dest="gpkg_file_path",
-        help=("Path to gpkg file to with catchment and nexus data (default: read by conf file)"
-        ),
-    )
-    parser.add_argument(
-        "--observed-flow",
-        type=str,
-        default=observed_flow,
-        dest="observed_flow_path",
-        help=("Observed flow data used as ground truth (default: read by conf file)"
-        ),
-    )
-    parser.add_argument(
-        "--model-binary",
-        type=str,
-        default=model_binary,
-        dest="model_binary",
-        help=("Path to binary to execute inside the singularity (default: read by conf file)"
-        ),
-    )
-    parser.add_argument(
-        "--template-realization",
-        type=str,
-        default=realization_template,
-        dest="template_realization",
-        help="Path to realization template JSON (default: read by conf file)",
-    )
-    parser.add_argument(
-        "--template-routing",
-        type=str,
-        default=routing_template,
-        dest="template_routing",
-        help="Path to routing template YAML (default: read by template json)",
-    )
-    parser.add_argument(
-        "--singularity-run-script",
-        type=str,
-        default="./ngen_image_runscript.sh",
-        dest="singularity_run_script",
-        help="Path to executable to be called by singularity exec (default: ./ngen_image_runscript.sh)",
-    )
-    parser.add_argument(
-        "--image-data-path",
-        type=str,
-        default="/ngen/ngen/data",
-        dest="image_data_path",
-        help="Image data path (default: /ngen/ngen/data)",
-    )
-    parser.add_argument(
-        "--gage-id",
-        type=int,
-        default=gage_id,
-        dest="gage_id",
-        help="Gage ID (default read by conf file)",
-    )
-    parser.add_argument(
-        "--sampling-reps",
-        type=int,
-        default=reps,
-        dest="sampling_reps",
-        help="Number of sampling repetitions (default read by conf file)",
-    )
-    parser.add_argument(
-        "--ngs",
-        type=int,
-        default=20,
-        dest="ngs",
-        help=f"number scuea complexes (default: 20)",
-    )
-    parser.add_argument(
-        "--bind",
-        type=str,
-        default="",
-        dest="bind",
-        help="additional binds to singularity (i.e. /scratch/user:/scratch/user = local_path:container_path) (default: ''), automatic binds (root_data_path:image_data_path,rank_input_path:image_data_path/inputs,rank_output_path:image_data_path/outputs) can be disabled with --no-auto-bind",
-    )
-    parser.add_argument(
-        "--no-auto-bind",
-        nargs="?",           
-        const=True,         
-        default=False,
-        type=lambda x: x.lower() == "true", 
-        dest="no_auto_bind",
-        help=(
-            "Disable auto binding to singularity. Omit flag = False. "
-            "Flag with no value = True. "
-            "Flag with value = evaluated as bool string (e.g. 'true'/'false')."
-        ),
-    )
-    parser.add_argument(
-        "--serial-sampling",
-        nargs="?",           
-        const=True,         
-        default=False,
-        type=lambda x: x.lower() == "true", 
-        dest="serial_sampling",
-        help=(
-            "Enable serial sampling. Omit flag = False. "
-            "Flag with no value = True. "
-            "Flag with value = evaluated as bool string (e.g. 'true'/'false')."
-        ),
-    )
+    non_opt_args = path_args + non_path_args
+    for arg in non_opt_args:
+        if arg["default"] != None:
+            parser.add_argument(f"--{arg["name"]}", type=arg["type"], default=arg["default"], help=arg["help"])
+        else:
+            parser.add_argument(f"--{arg["name"]}", type=arg["type"], required=True, help=arg["help"])
+    args, _ = parser.parse_known_args()
     tasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE", 1)
-    parser.add_argument(
-        "--ngen-parallel",
-        type=int,
-        default=int(tasks_per_node),
-        dest="ngen_parallel",
-        help=f"NGen parallel tasks (default: SLURM_NTASKS_PER_NODE, currently {tasks_per_node})",
-    )
-    parser.add_argument(
-        "--input-path",
-        type=str,
-        default=None,
-        dest="input_path",
-        help="Input path (default: None = auto-created under run/rank_N/input)",
-    )
-    parser.add_argument(
-        "--output-path",
-        type=str,
-        default=None,
-        dest="output_path",
-        help="Output path (default: None = auto-created under run/rank_N/output)",
-    )
-    parser.add_argument(
-        "--run-path",
-        type=str,
-        default=None,
-        dest="run_path",
-        help="root path for each rank to set up ngen simulation runs (default: root_data_path/run)",
-    )
-    parser.add_argument(
-        "--routing-output-frequency",
-        type=int,
-        default=15,
-        dest="routing_output_frequency",
-        help="Routing output frequency in minutes (default: 15)",
-    )
-    parser.add_argument(
-        "--clean",
-        nargs="?",           
-        const=True,         
-        default=False,
-        type=lambda x: x.lower() == "true", 
-        dest="clean",
-        help=(
-            "Enable cleaning on finish. Omit flag = False. "
-            "Flag with no value = True. "
-            "Flag with value = evaluated as bool string (e.g. 'true'/'false')."
-        ),
-    )
-    parser.add_argument(
-        "--verbosity",
-        nargs="?",       
-        default="none",
-        type=str, 
-        dest="verbosity",
-        help=(
-            "Control text output levels. [debug, info, warning, error, critical, none] (default: none)"
-        ),
-    )
-    parser.add_argument(
-        "--dbpath",
-        nargs="?",       
-        default=f"./ngen_param_tuning.csv",
-        type=str, 
-        dest="dbpath",
-        help=(
-            "Path to optimization storage csv (default: ./ngen_param_tuning.csv)"
-        ),
-    )
+    run_path = os.path.join(args.workdir_path,"run")
+    dbpath = os.path.join(args.workdir_path,"ngen_param_tuning.csv")
+    best_save_dir = os.path.join(args.workdir_path,"best")
+
+    optional_path_args = [
+        {"name": "model-binary",             "type": str, "default": "/dmod/bin/ngen-parallel",   "help": "Path to binary to execute inside the singularity (default: /dmod/bin/ngen-parallel)"},
+        {"name": "singularity-run-script",   "type": str, "default": "./ngen_image_runscript.sh", "help": "Path to executable to be called by singularity exec (default: scripts/ngen_image_runscript.sh)"},
+        {"name": "image-data-path",          "type": str, "default": "/ngen/ngen/data",           "help": "Image data path (default: /ngen/ngen/data)"},
+        {"name": "input-path",               "type": str, "default": None,                        "help": "Input path (default: run-path/rank_N/inputs)"},
+        {"name": "output-path",              "type": str, "default": None,                        "help": "Output path (default: run-path/rank_N/outputs)"},
+        {"name": "run-path",                 "type": str, "default": run_path,                        "help": "Root path for each rank (default: workdir/run)"},
+        {"name": "dbpath",                   "type": str, "default": dbpath,                          "help": "Path to optimization storage csv (default: workdir/ngen_param_tuning.csv)"},
+        {"name": "best-save-dir",           "type": str, "default": best_save_dir,                          "help": "Directory to store best params and plot (default: workdir/best)"},
+    ]
+
+    optional_non_path_args = [
+        {"name": "bind",                     "type": str, "default": "",                          "help": "Additional binds to singularity (default: '')"},
+        {"name": "ngen-parallel",            "type": int, "default": int(tasks_per_node),         "help": f"NGen parallel tasks (default: SLURM_NTASKS_PER_NODE, currently {tasks_per_node})"},
+        {"name": "ngs",                      "type": int, "default": 20,                          "help": "Number of SCE-UA complexes (default: 20)"},
+        {"name": "routing-output-frequency", "type": int, "default": 15,                          "help": "Routing output frequency in minutes (default: 15)"},
+        {"name": "verbosity",                "type": str, "default": "none",                      "help": "Control text output levels [debug, info, warning, error, critical, none] (default: none)"},
+        {"name": "site-name",                "type": str, "default": defaults["model"]["eval_params"].get("site_name",""),                      "help": "Name of site being optimized (default: read from conf file)"},
+    ]
+
+    opt_args = optional_path_args + optional_non_path_args
+    for arg in opt_args:
+        parser.add_argument(f"--{arg["name"]}", type=arg["type"], default=arg["default"], help=arg["help"])
+
+    flag_args = [
+        {"name": "no-auto-bind",    "const": True, "default": False, "help": "Disable auto binding to singularity. Omit = False, bare flag = True, explicit true/false also accepted"},
+        {"name": "serial-sampling", "const": True, "default": False, "help": "Enable serial sampling. Omit = False, bare flag = True"},
+        {"name": "clean",           "const": True, "default": False, "help": "Enable cleaning on finish. Omit = False, bare flag = True"},
+        {"name": "save-best",       "const": True, "default": True,  "help": "Save and plot the best params (default: True)"},
+    ]
+
+    for arg in flag_args:
+        parser.add_argument(f"--{arg["name"]}",nargs="?",const=arg["const"],default=arg["default"], help=arg["help"])
+
     
     args = parser.parse_args()
+
+    for p in path_args + optional_path_args:
+        p = p["name"].replace("-", "_")
+        val = getattr(args, p)
+        if val:
+            setattr(args, p, clean_path(val))
+
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    if args.run_path == None:
-        args.run_path = os.path.join(args.root_data_path,"run")
-    args.root_data_path           = clean_path(args.root_data_path)
-    args.data_config_path         = os.path.join(args.root_data_path,"config")
-    args.data_forcing_path        = os.path.join(args.root_data_path,"forcings")
-    args.gpkg_file_path           = clean_path(args.gpkg_file_path)
-    args.observed_flow_path       = clean_path(args.observed_flow_path)
-    args.singularity_image_path   = clean_path(args.singularity_image_path)
-    args.template_realization     = clean_path(args.template_realization)
-    args.template_routing         = clean_path(args.template_routing)
-    args.calibration_conf         = clean_path(args.calibration_conf)
-    args.singularity_run_script   = clean_path(os.path.abspath(args.singularity_run_script))
-    args.image_data_path          = clean_path(args.image_data_path)
-    args.run_path                 = clean_path(args.run_path)
-    args.dbpath                   = clean_path(args.dbpath)
 
-    args.config = yaml.safe_load(open(args.calibration_conf, 'r'))
-    args.sim_start = args.config["model"]["eval_params"]["valid_start_time"]
-    args.sim_stop = args.config["model"]["eval_params"]["valid_end_time"]
-    args.eval_start = args.config["model"]["eval_params"]["valid_eval_start_time"]
-    args.eval_stop = args.config["model"]["eval_params"]["valid_eval_end_time"]
-    args.sim_start_dt = pd.to_datetime(args.sim_start)
-    args.sim_stop_dt = pd.to_datetime(args.sim_stop)
-    args.eval_start_dt = pd.to_datetime(args.eval_start)
-    args.eval_stop_dt = pd.to_datetime(args.eval_stop)
+    args.sim_start_dt = pd.to_datetime(args.start_time)
+    args.sim_stop_dt = pd.to_datetime(args.end_time)
+    args.eval_start_dt = pd.to_datetime(args.eval_start_time)
+    args.eval_stop_dt = pd.to_datetime(args.eval_end_time)
 
-    args.dbname = os.path.basename(args.dbpath).split(".")[0]
+    args.dbname = Path(args.dbpath).with_suffix("")
     args.verbosity = args.verbosity.lower() if args.verbosity.lower() in NgenLogger.LEVELS else "info"
 
     return args
@@ -382,7 +239,7 @@ def directories_setup(args, rank):
     binds = args.bind
     if args.no_auto_bind == False:
         args.image_config_path = os.path.join(args.image_data_path,"config")
-        args.image_forcing_path = os.path.join(args.image_data_path,"forcings")
+        args.image_forcing_path = os.path.join(args.image_data_path,"forcings","forcings.nc")
         args.realization_image_path = os.path.join(args.image_input_path, "realization.json")
         args.routing_image_path = os.path.join(args.image_input_path, "routing.yaml")
         args.gpkg_file = os.path.basename(args.gpkg_file_path)
@@ -409,8 +266,8 @@ class NgenRun():
 
     def load_realization(self, realization_file):
         jsondata = json.load(open(realization_file,"r"))
-        jsondata["time"]["start_time"] = self.args.sim_start
-        jsondata["time"]["end_time"] = self.args.sim_stop
+        jsondata["time"]["start_time"] = self.args.start_time
+        jsondata["time"]["end_time"] = self.args.end_time
         jsondata["routing"]["t_route_config_file_with_path"] = self.args.routing_image_path
         jsondata["output_root"] = self.args.image_ngen_output_path
         json.dump(jsondata, open(realization_file, "w"),indent=4)
@@ -426,22 +283,17 @@ class NgenRun():
         for i, module in enumerate(modules): # create if not exists
             if (self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_type_name"] in list(module_map.keys())) and ("model_params" not in self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]):
                 self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_params"] = {}
-        for module_name in list(self.module_map.keys()):
-            for param in self.module_map[module_name]:
+        for module_name in list(module_map.keys()):
+            for param in module_map[module_name]:
                 for i, module in enumerate(modules): # interate across all modules and all params per module
                     if module["params"]["model_type_name"] == module_name:
-                        self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_params"][param] = self.args.params[param]
-
-# # Enforce rule: Cgw <= gw_storage
-# if param_map['Cgw'] > param_map['gw_storage']:
-#     # Return NaNs or a poor score (depending on your objective function)
-#     return np.full_like(self.observed.values.squeeze(), np.nan)
+                        self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_params"][param] = sim_params[param]
 
         json.dump(self.realization, open(self.args.realization_path, "w"),indent=4)
     
     def read_yaml(self, yaml_file):
         ymldata = yaml.safe_load(open(yaml_file, 'r'))
-        ymldata["compute_parameters"]["restart_parameters"]["start_datetime"] = self.args.sim_start
+        ymldata["compute_parameters"]["restart_parameters"]["start_datetime"] = self.args.start_time
         time_diff = self.args.sim_stop_dt - self.args.sim_start_dt
         self.args.nts = (time_diff.total_seconds() / 60) / 5 # in 5 minute intervals
         ymldata["compute_parameters"]["forcing_parameters"]["nts"] = self.args.nts
@@ -517,7 +369,10 @@ class SpotPySetup:
         self.args = args
         self.ngen = Ngen
         self.config_yaml_path = args.calibration_conf
-        self.params = self.load_params(self.config_yaml_path)        
+        self.params = self.load_params(self.config_yaml_path)
+        self.save_best = self.args.save_best  
+        if self.save_best:
+            self.best = np.inf      
 
     def load_params(self,yaml_file):
         training_params_dict = {}
@@ -553,9 +408,14 @@ class SpotPySetup:
         self.logger.info(f"run simulation with guess {type(sim_params)} {sim_params}")
         try:
             self.args.trial_num += 1
+
+            # # Enforce rule: Cgw <= gw_storage
+            # if sim_params.get("Cgw",1.8e-05) > sim_params.get("max_gw_storage",0.05):
+            #     return [np.inf]
+
             self.update_params(sim_params)
             self.ngen.run_ngen()
-            dt = datetime.strptime(self.args.sim_start, "%Y-%m-%d %H:%M:%S")
+            dt = datetime.strptime(self.args.start_time, "%Y-%m-%d %H:%M:%S")
             filename = dt.strftime("troute_output_%Y%m%d%H%M") + ".nc"
             ds = xr.open_dataset(os.path.join(self.args.troute_output_path, filename))
             sim_res = ds['flow'].sel(feature_id=self.args.feature_id).values
@@ -588,15 +448,22 @@ class SpotPySetup:
         b = np.mean(evaluation_clean) / np.mean(simulation_clean)
         kge = 1 - np.sqrt((r-1)**2 + (a-1)**2 + (b-1)**2)
 
-        # plt.figure()
-        # plt.plot(full_index, evaluation, label="observed flow")
-        # plt.plot(full_index, simulation, label="simulated flow")
-        # plt.xticks(rotation=45) 
-        # plt.axvline(x=pd.to_datetime(self.args.eval_start), color="k", linestyle="--", linewidth=1, label="eval start")
-        # plt.title(f"{self.args.sim_start} {self.args.sim_stop} (output every {self.args.routing_output_frequency}min) \n kge={kge}")
-        # plt.legend()
-        # plt.savefig(f"./figures/kge_{kge:.4f}.png")
-        # self.logger.info(f"save figure to ./figures/kge_{kge:.4f}.png")
+        if self.save_best:
+            if self.best > -kge:
+                self.best = -kge
+                self.logger.info(f"new best {self.best}: {params}")
+
+                plt.figure()
+                plt.plot(full_index, evaluation, label="observed flow")
+                plt.plot(full_index, simulation, label="simulated flow")
+                plt.xticks(rotation=45) 
+                plt.axvline(x=pd.to_datetime(self.args.eval_start_time), color="k", linestyle="--", linewidth=1, label="eval start")
+                plt.title(f"{args.site_name} ({args.gage_id})\nsimulated vs observed values\nKGE:{kge}")
+                plt.legend()
+                savename = os.path.join(args.best_save_dir, "best_params.png")
+                os.makedirs(args.best_save_dir, exist_ok=True)
+                plt.savefig(f"{savename}")
+                self.logger.info(f"save figure to {savename}")
 
         self.logger.info(f"trial {self.args.trial_num} on rank {self.args.rank} complete with kge {kge} in {self.args.runtime} seconds")
         return -kge
@@ -609,7 +476,7 @@ def run_spotpy(args):
 
     parallel_sampling = "seq" if args.serial_sampling else "mpi"
 
-    args.logger.debug(f"run spotpy in {args.root_data_path} feature {args.feature_id} for {args.sampling_reps} reps")
+    args.logger.debug(f"run spotpy in {args.workdir_path} feature {args.feature_id} for {args.sampling_reps} reps")
 
     args.logger.debug(f"setup ngen model")
     NgenModel = NgenRun(args)
@@ -625,7 +492,7 @@ def run_spotpy(args):
                 completed = 0
     completed = args.sampling_comm.bcast(completed, root=0)
     
-    args.logger.debug(f"[rank {args.rank}] create sampler with database {args.dbname}.csv with {completed} completed trials and in mode {parallel_sampling}")
+    args.logger.debug(f"[rank {args.rank}] create sampler with database {args.dbpath} with {completed} completed trials and in mode {parallel_sampling}")
     args.sampler = spotpy.algorithms.sceua(setup, dbname=args.dbname, dbformat="csv", parallel=parallel_sampling, save_sim=False, dbappend=(completed > 0))
 
     args.sampling_reps = max(args.sampling_reps - completed, 0)
@@ -638,11 +505,6 @@ def run_spotpy(args):
     best_params = spotpy.analyser.get_best_parameterset(results, maximize=False)
     
 
-#TODO: 
-#      verify objective scoring is correct
-#      run on one gage
-#      perform data setup to all other gages and run
-#      documentation
 
 if __name__ == "__main__":
     WORLD = MPI.COMM_WORLD

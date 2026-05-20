@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name="scuea-optimization"
-#SBATCH --nodes=12
-#SBATCH --ntasks-per-node=12
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=1
 #SBATCH --output="script_outputs/scuea_optimization-%j.out"                  
-#SBATCH --time=24:00:00 
+#SBATCH --time=00:08:00 
 #SBATCH --mail-user="lsgehr@mines.edu"
 #SBATCH --mail-type=FAIL,START,END  
-#SBATCH --signal=SIGTERM@300
+#SBATCH --signal=SIGTERM@30
 
 module purge
 module load compilers/gcc/12.2.1
@@ -16,13 +16,12 @@ module load mpi/openmpi/gcc/4.1.6
 . ~/.conda/.conda_init
 conda activate ngen_mpi
 
-config_file="/home/lsgehr/scratch/NextGen/spotpy_cal/data/11264500/cat-3313417/config/ngen_cal_conf.yaml"
-singularity_image_path="/home/lsgehr/scratch/NextGen/NGIAB-HPCInfra/singularity_ngen/ngen.sif"
+config_file="/home/lsgehr/scratch/NextGen/spotpy_cal/sites/07056000/cat-2196900/config/ngen_cal_conf.yaml"
 scratch_bind="/scratch/lsgehr:/scratch/lsgehr"
 
 export PYTHONUNBUFFERED=1
 RESTARTS=${RESTARTS:-0}
-MAX_RESTARTS=${MAX_RESTARTS:-5}
+MAX_RESTARTS=${MAX_RESTARTS:-0}
 
 srun --nodes=1 \
      --ntasks-per-node=$SLURM_NTASKS_PER_NODE \
@@ -30,7 +29,8 @@ srun --nodes=1 \
      --exclusive \
      python spotpy_calibration.py $config_file $singularity_image_path --ngs=20 \
         --bind=$scratch_bind \
-        --verbosity=info
+        --verbosity=info \
+        --sampling-reps=3
 
 EXIT_CODE=$?
 

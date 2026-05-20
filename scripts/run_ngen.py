@@ -151,8 +151,8 @@ class NgenRun():
 
     def load_realization(self, realization_file):
         jsondata = json.load(open(realization_file,"r"))
-        jsondata["time"]["start_time"] = args.start_date.strftime("%Y-%m-%d %H:%M:%S")
-        jsondata["time"]["end_time"] = args.end_date.strftime("%Y-%m-%d %H:%M:%S")
+        jsondata["time"]["start_time"] = self.args.start_date.strftime("%Y-%m-%d %H:%M:%S")
+        jsondata["time"]["end_time"] = self.args.end_date.strftime("%Y-%m-%d %H:%M:%S")
         jsondata["routing"]["t_route_config_file_with_path"] = self.args.routing_image_path
         jsondata["output_root"] = self.args.image_ngen_output_path
         json.dump(jsondata, open(realization_file, "w"),indent=4)
@@ -232,18 +232,26 @@ class NgenRun():
 def kge(evaluation, simulation, sim_start, sim_stop, eval_start, freq=15, return_values=False): 
     full_index = pd.date_range(start=sim_start, end=sim_stop, freq=f"{freq}min")[:-1]
 
-    eval_mask = (full_index >= eval_start) & (full_index <= sim_stop) & (~(np.isnan(evaluation)))
-    evaluation_clean = evaluation[eval_mask]
-    simulation_clean = simulation[eval_mask]
+    clean_mask = (~(np.isnan(evaluation)))
+    full_index_clean = full_index[clean_mask]
+    eval_mask = (
+        (full_index_clean >= eval_start) &
+        (full_index_clean <= sim_stop)
+    )
+    # eval_index = full_index_clean[eval_mask]
 
-    r = np.corrcoef(evaluation_clean,simulation_clean)[0,1]
-    a = np.std(evaluation_clean) / np.std(simulation_clean)
-    b = np.mean(evaluation_clean) / np.mean(simulation_clean)
+    evaluation_clean = evaluation[clean_mask]
+    simulation_clean = simulation[clean_mask]
+    evaluation_eval = evaluation_clean[eval_mask]
+    simulation_eval = simulation_clean[eval_mask]
+
+    r = np.corrcoef(evaluation_eval,simulation_eval)[0,1]
+    a = np.std(evaluation_eval) / np.std(simulation_eval)
+    b = np.mean(evaluation_eval) / np.mean(simulation_eval)
     kge_score = 1 - np.sqrt((r-1)**2 + (a-1)**2 + (b-1)**2)
 
     if return_values:
-        eval_index = full_index[eval_mask]
-        return kge_score, (eval_index, evaluation_clean, simulation_clean)
+        return kge_score, (full_index_clean, evaluation_clean, simulation_clean)
     return kge_score
 
 if __name__ == "__main__":
@@ -266,6 +274,12 @@ if __name__ == "__main__":
     plt.title(f"{args.site_name} ({args.gage_id})\nsimulated vs observed values\nKGE:{kge_score}")
     plt.plot(indices, obs_vals, label="observed flow")
     plt.plot(indices, sim_vals, label="simulated flow")
+    plt.axvline(
+        args.eval_start_date,
+        linestyle="--",
+        color="black",
+        label="evaluation start"
+    )
     plt.xticks(rotation=45) 
     plt.legend()
     plt.savefig(os.path.join(args.figure_output_dir,"run_ngen_obs_vs_sim.png"))
