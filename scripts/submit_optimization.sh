@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name="scuea-optimization"
 #SBATCH --nodes=2
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=1
 #SBATCH --output="script_outputs/scuea_optimization-%j.out"                  
-#SBATCH --time=00:08:00 
+#SBATCH --time=00:03:00 
 #SBATCH --mail-user="lsgehr@mines.edu"
 #SBATCH --mail-type=FAIL,START,END  
 #SBATCH --signal=SIGTERM@30
@@ -43,5 +43,5 @@ if [ $EXIT_CODE -eq 42 ]; then
         echo "Max restarts ($MAX_RESTARTS) reached, not resubmitting."
     fi
 else
-    echo "Job finished normally (exit code $EXIT_CODE)."
+    echo "Job finished with exit code $EXIT_CODE."
 fi

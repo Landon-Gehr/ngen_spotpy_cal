@@ -101,12 +101,14 @@ def parse_args():
     parser.add_argument("calibration_conf",       type=str, help="location of calibration config yaml")
     args, _ = parser.parse_known_args()
 
-    defaults = yaml.safe_load(open(args.calibration_conf, 'r'))
+    with open(args.calibration_conf, 'r') as f:
+        defaults = yaml.safe_load(f)
     crosswalk = defaults["model"].get("crosswalk",None)
     feature_id = None
     gage_id = None
     if check_path(crosswalk):
-        crosswalk = json.load(open(crosswalk,"r"))
+        with open(crosswalk,"r") as f:
+            crosswalk = json.load(f)
         feature_id = int(((list(crosswalk.keys())[0]).split("-"))[1])
         gage_id = crosswalk[list(crosswalk.keys())[0]]["Gage_no"]    
 
@@ -123,7 +125,7 @@ def parse_args():
 
     non_path_args = [
         {"name": "feature-id",      "type": int, "default":defaults["model"]["eval_params"].get("featureID",feature_id), "help": "Feature id to be used for flow evaluation (default: read by crosswalk file)"},
-        {"name": "gage-id",         "type": int, "default":defaults["model"]["eval_params"].get("basinID",gage_id), "help": "Gage ID (default: read by crosswalk file)"},
+        {"name": "gage-id",         "type": str, "default":defaults["model"]["eval_params"].get("basinID",gage_id), "help": "Gage ID (default: read by crosswalk file)"},
         {"name": "start-time",      "type": str, "default":defaults["model"]["eval_params"].get("start_time",None), "help": "date to start simulation (default: read by conf file)"},
         {"name": "end-time",        "type": str, "default":defaults["model"]["eval_params"].get("end_time",None), "help": "date to stop simulation (default: read by conf file)"},
         {"name": "eval-start-time", "type": str, "default":defaults["model"]["eval_params"].get("eval_start_time",None), "help": "date to start evaluation (default: read by conf file)"},
@@ -193,7 +195,7 @@ def parse_args():
     args.eval_start_dt = pd.to_datetime(args.eval_start_time)
     args.eval_stop_dt = pd.to_datetime(args.eval_end_time)
 
-    args.dbname = Path(args.dbpath).with_suffix("")
+    args.dbname = str(Path(args.dbpath).with_suffix(""))
     args.verbosity = args.verbosity.lower() if args.verbosity.lower() in NgenLogger.LEVELS else "info"
 
     return args
@@ -265,16 +267,17 @@ class NgenRun():
         self.observed = self.read_observed(self.args.observed_flow_path, self.args.sim_start_dt, self.args.sim_stop_dt, freq_minutes=self.args.routing_output_frequency)
 
     def load_realization(self, realization_file):
-        jsondata = json.load(open(realization_file,"r"))
+        with open(realization_file,"r") as f:
+            jsondata = json.load(f)
         jsondata["time"]["start_time"] = self.args.start_time
         jsondata["time"]["end_time"] = self.args.end_time
         jsondata["routing"]["t_route_config_file_with_path"] = self.args.routing_image_path
         jsondata["output_root"] = self.args.image_ngen_output_path
-        json.dump(jsondata, open(realization_file, "w"),indent=4)
+        with open(realization_file,"w") as f:
+            json.dump(jsondata, f,indent=4)
         return jsondata
     
     def update_realization(self, sim_params, module_map, wipe_prev=False):
-        self.logger.info(f"update param realization {sim_params}, {module_map}")
         modules = self.realization["global"]["formulations"][0]["params"]["modules"] # assumes formulations is array of size 1
         if wipe_prev:
             for i, module in enumerate(modules): # Wipe past params
@@ -289,10 +292,12 @@ class NgenRun():
                     if module["params"]["model_type_name"] == module_name:
                         self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_params"][param] = sim_params[param]
 
-        json.dump(self.realization, open(self.args.realization_path, "w"),indent=4)
+        with open(self.args.realization_path, "w") as f:
+            json.dump(self.realization, f,indent=4)
     
     def read_yaml(self, yaml_file):
-        ymldata = yaml.safe_load(open(yaml_file, 'r'))
+        with open(yaml_file, 'r') as f:
+            ymldata = yaml.safe_load(f)
         ymldata["compute_parameters"]["restart_parameters"]["start_datetime"] = self.args.start_time
         time_diff = self.args.sim_stop_dt - self.args.sim_start_dt
         self.args.nts = (time_diff.total_seconds() / 60) / 5 # in 5 minute intervals
@@ -302,7 +307,8 @@ class NgenRun():
         ymldata["compute_parameters"]["forcing_parameters"]["qlat_input_folder"] = self.args.image_ngen_output_path
         ymldata["output_parameters"]["stream_output"]["stream_output_directory"] = self.args.image_troute_output_path
         ymldata["output_parameters"]["stream_output"]["stream_output_internal_frequency"] = self.args.routing_output_frequency
-        yaml.dump(ymldata, open(yaml_file, 'w'))
+        with open(yaml_file, 'w') as f:
+            yaml.dump(ymldata, f)
         return ymldata
     
     def read_observed(self, observed_file, start_date, end_date, freq_minutes=15):
@@ -346,7 +352,7 @@ class NgenRun():
 
         
         run_dir = os.path.abspath(self.args.rank_dir)
-        self.logger.debug(f"rank {self.args.rank} running ngen '{" ".join(ngen_command)}' from working directory {run_dir}")
+        self.logger.debug(f"running ngen '{" ".join(ngen_command)}' from working directory {run_dir}")
         try:
             start = time.time()
             subprocess.run(ngen_command, check=True)
@@ -355,7 +361,6 @@ class NgenRun():
             # self.args.average_runtime = np.mean(self.args.timings)
             self.args.average_runtime = self.args.average_runtime + (self.args.runtime - self.args.average_runtime)/self.args.trial_num
             self.args.logger.info(f"subprocess with {self.args.ngen_parallel} cpus finished in {self.args.runtime} seconds (avg: {self.args.average_runtime})")
-            self.args.logger.info(f"[rank {self.args.rank}] subprocess finished in {self.args.runtime} seconds (avg: {self.args.average_runtime})")
             self.args.logger.info(f"timings: {self.args.timings}")
         except Exception as e:
             traceback.print_exc()
@@ -376,7 +381,8 @@ class SpotPySetup:
 
     def load_params(self,yaml_file):
         training_params_dict = {}
-        ymldata = yaml.safe_load(open(yaml_file))
+        with open(yaml_file) as f:
+            ymldata = yaml.safe_load(f)
         self.cfe_noah_map = {'CFE':[],"NoahOWP":[]}
         for param in ymldata['CFE']:
             self.cfe_noah_map["CFE"] += [param["name"]]
@@ -433,7 +439,7 @@ class SpotPySetup:
     # r = corr coef
     # a = std dev pred / std dev obs
     # b = mean pred / mean obs
-    def objectivefunction(self, evaluation, simulation, params=None): 
+    def objectivefunction(self, evaluation, simulation, params=None):
         self.logger.debug(f"observed data {len(evaluation)} ({type(evaluation)})")
         self.logger.debug(f"simulated data {len(simulation)} ({type(simulation)})")
         full_index = pd.date_range(start=self.args.sim_start_dt, end=self.args.sim_stop_dt, freq=f"{self.args.routing_output_frequency}min")[:-1]
@@ -453,15 +459,25 @@ class SpotPySetup:
                 self.best = -kge
                 self.logger.info(f"new best {self.best}: {params}")
 
+                self.args.best_dict = {
+                    "site":self.args.site_name,
+                    "gage_id":self.args.gage_id,
+                    "feature_id":self.args.feature_id,
+                    "params":dict((params[1],params[0]))
+                }
+
+                with open(os.path.join(self.args.best_save_dir,f"best_params_{self.args.gage_id}.json"), "w") as f:
+                    json.dump(self.args.best_dict, f,indent=4)
+
                 plt.figure()
                 plt.plot(full_index, evaluation, label="observed flow")
                 plt.plot(full_index, simulation, label="simulated flow")
                 plt.xticks(rotation=45) 
                 plt.axvline(x=pd.to_datetime(self.args.eval_start_time), color="k", linestyle="--", linewidth=1, label="eval start")
-                plt.title(f"{args.site_name} ({args.gage_id})\nsimulated vs observed values\nKGE:{kge}")
+                plt.title(f"{self.args.site_name} ({self.args.gage_id})\nsimulated vs observed values\nKGE:{kge}")
                 plt.legend()
-                savename = os.path.join(args.best_save_dir, "best_params.png")
-                os.makedirs(args.best_save_dir, exist_ok=True)
+                savename = os.path.join(self.args.best_save_dir, "best_params.png")
+                os.makedirs(self.args.best_save_dir, exist_ok=True)
                 plt.savefig(f"{savename}")
                 self.logger.info(f"save figure to {savename}")
 

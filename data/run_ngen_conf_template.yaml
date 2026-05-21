@@ -12,7 +12,7 @@ start_date: "2008-10-01 00:00:00"
 eval_start_date: "2009-10-01 00:00:00"
 end_date: "2010-09-30 00:00:00"
 bind: /scratch/lsgehr:/scratch/lsgehr
-gage_id: 11264500
+gage_id: "11264500"
 site_name: "Merced River"
 feature_id: 3313417
 stream_output_frequency: 15

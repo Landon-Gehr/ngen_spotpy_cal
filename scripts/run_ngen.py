@@ -31,7 +31,8 @@ def parse_args():
 
     defaults = {}
     if args.run_config_path:
-        defaults = yaml.safe_load(open(args.run_config_path, 'r'))
+        with open(args.run_config_path, 'r') as f:
+            defaults = yaml.safe_load(f)
 
     path_args = [
         "singularity-image-path",
@@ -62,14 +63,22 @@ def parse_args():
         "stream-output-frequency":15,
     }
 
-    all_args = path_args + non_path_args + list(optional_args.keys())
+    # "name":(const. default)
+    flag_args = {
+        "clear-run-dir":(False, True),
+        "save-sim":(False, True)
+    }
+
+    all_args = path_args + non_path_args + list(optional_args.keys()) + list(flag_args.keys())
 
     for arg in all_args:
         key = arg.replace("-", "_")
         if key in defaults:
             parser.add_argument(f"--{arg}", type=str, default=defaults[key])
         elif arg in list(optional_args.keys()):
-            parser.add_argument(f"--{arg}", type=str, default=optional_args[arg])
+            parser.add_argument(f"--{arg}", type=type(optional_args[arg]), default=optional_args[arg])
+        elif arg in list(flag_args.keys()):
+            parser.add_argument(f"--{arg}",nargs="?",const=(flag_args[arg])[0],default=(flag_args[arg])[1])
         else:
             parser.add_argument(f"--{arg}", type=str, required=True)
 
@@ -88,6 +97,10 @@ def parse_args():
     args.feature_id = int(args.feature_id)
     args.stream_output_frequency = int(args.stream_output_frequency)
     args.ngen_parallel = int(args.ngen_parallel)
+
+    if args.clear_run_dir:
+        shutil.rmtree(args.run_dir)
+    os.makedirs(args.run_dir, exist_ok=True)
 
     return args
 
@@ -150,12 +163,14 @@ class NgenRun():
         self.observed = self.read_observed(self.args.observed_flow_path, self.args.start_date, self.args.end_date)
 
     def load_realization(self, realization_file):
-        jsondata = json.load(open(realization_file,"r"))
+        with open(realization_file,"r") as f:
+            jsondata = json.load(f)
         jsondata["time"]["start_time"] = self.args.start_date.strftime("%Y-%m-%d %H:%M:%S")
         jsondata["time"]["end_time"] = self.args.end_date.strftime("%Y-%m-%d %H:%M:%S")
         jsondata["routing"]["t_route_config_file_with_path"] = self.args.routing_image_path
         jsondata["output_root"] = self.args.image_ngen_output_path
-        json.dump(jsondata, open(realization_file, "w"),indent=4)
+        with open(realization_file, "w") as f:
+            json.dump(jsondata, f,indent=4)
         return jsondata
     
     def update_realization(self, wipe_prev=True):
@@ -173,10 +188,12 @@ class NgenRun():
                     if module["params"]["model_type_name"] == module_name:
                         self.realization["global"]["formulations"][0]["params"]["modules"][i]["params"]["model_params"][param] = self.args.params[param]
 
-        json.dump(self.realization, open(self.args.realization_path, "w"),indent=4)
+        with open(self.args.realization_path, "w") as f:
+            json.dump(self.realization, f,indent=4)
     
     def read_yaml(self, yaml_file):
-        ymldata = yaml.safe_load(open(yaml_file, 'r'))
+        with open(yaml_file, 'r') as f:
+            ymldata = yaml.safe_load(f)
         ymldata["compute_parameters"]["restart_parameters"]["start_datetime"] = self.args.start_date.strftime("%Y-%m-%d %H:%M:%S")
         time_diff = self.args.end_date - self.args.start_date
         self.args.nts = (time_diff.total_seconds() / 60) / 5 # in 5 minute intervals
@@ -186,7 +203,8 @@ class NgenRun():
         ymldata["compute_parameters"]["forcing_parameters"]["qlat_input_folder"] = self.args.image_ngen_output_path
         ymldata["output_parameters"]["stream_output"]["stream_output_directory"] = self.args.image_troute_output_path
         ymldata["output_parameters"]["stream_output"]["stream_output_internal_frequency"] = self.args.stream_output_frequency
-        yaml.dump(ymldata, open(yaml_file, 'w'))
+        with open(yaml_file, 'w') as f:    
+            yaml.dump(ymldata, f)
         return ymldata
     
     def read_observed(self, observed_file, start_date, end_date, freq_minutes=15):
@@ -230,6 +248,10 @@ class NgenRun():
         print(f"subprocess finished in {runtime} seconds")
 
 def kge(evaluation, simulation, sim_start, sim_stop, eval_start, freq=15, return_values=False): 
+
+    if args.save_sim:
+        np.save(os.path.join(args.root_output_dir,"ngen_sim.npy"), simulation)
+
     full_index = pd.date_range(start=sim_start, end=sim_stop, freq=f"{freq}min")[:-1]
 
     clean_mask = (~(np.isnan(evaluation)))
@@ -258,7 +280,9 @@ if __name__ == "__main__":
 
     args = parse_args()
     args.rank=0
-    args.params = json.load(open(args.params_json))
+    with open(args.params_json) as f:
+        args.best_json = json.load(f)
+    args.params = args.best_json["params"]
     directory_setup(args)
     runner = NgenRun(args)
     runner.run_ngen()
