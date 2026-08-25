@@ -11,7 +11,7 @@ module purge
 module load compilers/gcc/12.2.1
 module load mpi/openmpi/gcc/4.1.6
 
-. ~/.conda/.conda_init
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate ngen_mpi
 
 run_config_path="/home/lsgehr/scratch/NextGen/spotpy_cal/sites/03488000/run_ngen_conf.yaml"

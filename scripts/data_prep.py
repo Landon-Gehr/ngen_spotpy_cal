@@ -45,7 +45,7 @@ def ngiab_data_retrieval(site,start,end,save_dir,tries=1):
     cmd = ["uvx",
            "ngiab-prep",
            "-i",f"{site}",
-           "--start", f"{start}"
+           "--start", f"{start}",
            "--end", f"{end}",
            "-sfr",
            "--source", "aorc", 
