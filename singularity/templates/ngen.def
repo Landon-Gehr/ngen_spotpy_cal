@@ -1,0 +1,225 @@
+Bootstrap: docker
+From: rockylinux:9.1
+
+%environment
+    export TROUTE_REPO="CIROH-UA/t-route"
+    export TROUTE_BRANCH="ngiab"
+    export NGEN_REPO="CIROH-UA/ngen"
+    export NGEN_BRANCH="ngiab"
+    export OMPI_DIR=/opt/ompi
+    export SINGULARITY_OMPI_DIR=$OMPI_DIR
+    export SINGULARITYENV_APPEND_PATH=$OMPI_DIR/bin
+    export SINGULARITYENV_APPEND_LD_LIBRARY_PATH=$OMPI_DIR/lib
+    export PATH="/root/.cargo/bin:$PATH"
+    export PATH="/ngen/.venv/bin:$PATH"
+    export UV_COMPILE_BYTECODE=1
+
+%post
+    NJOBS=2
+    echo "limit $(nproc) jobs to $NJOBS"
+
+    # First set the environment variables for use in %post
+    TROUTE_REPO="CIROH-UA/t-route"
+    TROUTE_BRANCH="ngiab"
+    NGEN_REPO="CIROH-UA/ngen"
+    NGEN_BRANCH="ngiab"
+    export UV_COMPILE_BYTECODE=1
+
+    # Install system dependencies
+    echo "max_parallel_downloads=10" >> /etc/dnf/dnf.conf
+    dnf update -y
+    dnf install -y epel-release
+    dnf config-manager --set-enabled crb
+    dnf install -y sudo vim gcc gcc-c++ make cmake ninja-build tar git gcc-gfortran libgfortran sqlite sqlite-devel \
+        python3 python3-devel python3-pip \
+        bzip2 expat expat-devel flex bison udunits2 udunits2-devel zlib-devel \
+        wget hdf5 hdf5-devel netcdf netcdf-devel \
+        netcdf-fortran netcdf-fortran-devel netcdf-cxx netcdf-cxx-devel lld \
+        pmix pmix-devel slurm slurm-devel
+
+    echo "Installing Open MPI"
+    export OMPI_DIR=/opt/ompi
+    export OMPI_VERSION=4.1.6
+    export OMPI_URL="https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-${OMPI_VERSION}.tar.bz2"
+    mkdir -p /tmp/ompi
+    mkdir -p /opt
+    # Download
+    cd /tmp/ompi && wget -O openmpi-${OMPI_VERSION}.tar.bz2 $OMPI_URL && tar -xjf openmpi-${OMPI_VERSION}.tar.bz2
+    # Compile and install
+    cd /tmp/ompi/openmpi-$OMPI_VERSION && ./configure --prefix=$OMPI_DIR --with-slurm --with-pmi --enable-shared --enable-mpi-cxx && make -j $NJOBS install
+    # Set env variables so we can compile our application
+    export PATH=${OMPI_DIR}/bin:$PATH
+    export LD_LIBRARY_PATH=${OMPI_DIR}/lib:$LD_LIBRARY_PATH
+    export MANPATH=${OMPI_DIR}/share/man:$MANPATH
+
+
+
+
+
+
+
+    # NGEN
+
+    # Create necessary directories
+    mkdir -p /ngen
+    mkdir -p /ngen/t-route
+
+    # Build Boost
+    cd /
+    wget https://archives.boost.io/release/1.79.0/source/boost_1_79_0.tar.gz
+    tar -xzf boost_1_79_0.tar.gz
+    cd boost_1_79_0
+    ./bootstrap.sh && ./b2 && ./b2 headers
+    export BOOST_ROOT=/boost_1_79_0
+
+    # Setup for troute
+    cd /ngen
+    export FC=gfortran
+    export NETCDF=/usr/lib64/gfortran/modules/
+    ln -s /usr/bin/python3 /usr/bin/python
+
+    # Install UV and setup Python environment
+    pip3 install uv && uv venv
+    . /ngen/.venv/bin/activate
+    uv pip install -r "https://raw.githubusercontent.com/${TROUTE_REPO}/refs/heads/${TROUTE_BRANCH}/requirements.txt"
+
+    # Build t-route
+    cd /ngen/t-route
+
+    ## Fix setuptools_scm before cloning
+    export SETUPTOOLS_SCM_PRETEND_VERSION=1.0.0
+    export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TROUTE_CONFIG=1.0.0
+    export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TROUTE_NETWORK=1.0.0
+    export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TROUTE_ROUTING=1.0.0
+    export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TROUTE_NWM=1.0.0
+
+    git clone --single-branch --branch $TROUTE_BRANCH https://github.com/$TROUTE_REPO.git .
+    echo $(git remote get-url origin | sed 's/\.git$//' | awk '{print $0 "/tree/" }' | tr -d '\n' && git rev-parse HEAD) >> /tmp/troute_url
+    git submodule update --init --depth 1
+    uv pip install build wheel
+
+    # Modify and run compiler
+    sed -i 's/build_[a-z]*=/#&/' compiler.sh
+    ./compiler.sh no-e
+
+    # Install troute packages
+    uv pip install --config-setting='--build-option=--use-cython' src/troute-network/
+    uv build --wheel --config-setting='--build-option=--use-cython' src/troute-network/
+    uv pip install --no-build-isolation --config-setting='--build-option=--use-cython' src/troute-routing/
+    uv build --wheel --no-build-isolation --config-setting='--build-option=--use-cython' src/troute-routing/
+    uv build --wheel --no-build-isolation src/troute-config/
+    uv build --wheel --no-build-isolation src/troute-nwm/
+
+    # Clone and build NGEN
+    cd /ngen
+    git clone --single-branch --branch $NGEN_BRANCH https://github.com/$NGEN_REPO.git
+    cd ngen
+    git submodule update --init --recursive --depth 1
+    echo $(git remote get-url origin | sed 's/\.git$//' | awk '{print $0 "/tree/" }' | tr -d '\n' && git rev-parse HEAD) >> /tmp/ngen_url
+
+    # Build NGEN
+    export COMMON_BUILD_ARGS="-DNGEN_WITH_EXTERN_ALL=ON \
+        -DNGEN_WITH_NETCDF:BOOL=ON \
+        -DNGEN_WITH_BMI_C:BOOL=ON \
+        -DNGEN_WITH_BMI_FORTRAN:BOOL=ON \
+        -DNGEN_WITH_PYTHON:BOOL=ON \
+        -DNGEN_WITH_ROUTING:BOOL=ON \
+        -DNGEN_WITH_SQLITE:BOOL=ON \
+        -DNGEN_WITH_UDUNITS:BOOL=ON \
+        -DUDUNITS_QUIET:BOOL=ON \
+        -DNGEN_WITH_TESTS:BOOL=OFF \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=. \
+        -DCMAKE_CXX_FLAGS='-fuse-ld=lld'"
+
+    # Build serial version
+    cmake -G Ninja -B cmake_build_serial -S . ${COMMON_BUILD_ARGS} -DNGEN_WITH_MPI:BOOL=OFF
+    cmake --build cmake_build_serial --target all -- -j $NJOBS
+
+    # Build parallel version
+    dnf install -y netcdf-cxx4-openmpi-devel
+    export MPI_BUILD_ARGS="-DNGEN_WITH_MPI:BOOL=ON \
+        -DNetCDF_ROOT=${OMPI_DIR} \
+        -DCMAKE_PREFIX_PATH=${OMPI_DIR} \
+        -DCMAKE_LIBRARY_PATH=${OMPI_DIR}/lib"
+
+    cmake -G Ninja -B cmake_build_parallel -S . ${COMMON_BUILD_ARGS} ${MPI_BUILD_ARGS} \
+        -DNetCDF_CXX_INCLUDE_DIR=/usr/include/openmpi-$(arch) \
+        -DNetCDF_INCLUDE_DIR=/usr/include/openmpi-$(arch)
+    cmake --build cmake_build_parallel --target all -- -j $NJOBS
+
+    # Setup final directories
+    mkdir -p /dmod/datasets /dmod/datasets/static /dmod/shared_libs /dmod/bin /dmod/utils/
+    cp -a ./extern/*/cmake_build/*.so* /dmod/shared_libs/. || true
+    find ./extern/noah-owp-modular -type f -iname "*.TBL" -exec cp '{}' /dmod/datasets/static \;
+    cp -a ./cmake_build_parallel/ngen /dmod/bin/ngen-parallel || true
+    cp -a ./cmake_build_serial/ngen /dmod/bin/ngen-serial || true
+    cp -a ./cmake_build_parallel/partitionGenerator /dmod/bin/partitionGenerator || true
+    cp -ar ./utilities/* /dmod/utils/
+    cd /dmod/bin && \
+        (stat ngen-parallel && ln -s ngen-parallel ngen) || (stat ngen-serial && ln -s ngen-serial ngen)
+
+    # Final setup
+    echo "/dmod/shared_libs/" >> /etc/ld.so.conf.d/ngen.conf && ldconfig -v
+    ln -s /dmod/bin/ngen /usr/local/bin/ngen
+    chmod a+x /dmod/bin/*
+
+    # Install final Python dependencies
+    export UV_INSTALL_DIR="/root/.cargo/bin"
+    export PATH="$UV_INSTALL_DIR:$PATH"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    uv self update && uv venv
+    cd /ngen/t-route/src
+    ls -la troute-*/
+
+    for pkg in troute-network troute-routing troute-config troute-nwm; do
+        if [ -d "$pkg" ]; then
+            echo "Installing package from: $pkg"
+            if [ "$pkg" == "troute-routing" ]; then
+                # For troute-routing, use --no-build-isolation
+                uv pip install --no-cache-dir --no-build-isolation "$pkg/"
+            else
+                uv pip install --no-cache-dir "$pkg/"
+            fi
+        fi
+    done
+    uv pip install --no-cache-dir netCDF4==1.6.3
+    uv pip install numpy==$(/dmod/bin/ngen --info | grep -e 'NumPy Version: ' | cut -d ':' -f 2 | uniq | xargs)
+
+    # Install lstm
+    ls -l /ngen/ngen/extern
+    ls -l /ngen/ngen/extern/lstm
+    cp -r /ngen/ngen/extern/lstm/lstm/* /ngen/ngen/extern/lstm/
+    uv pip install --no-cache-dir /ngen/ngen/extern/lstm --extra-index-url https://download.pytorch.org/whl/cpu
+
+    # Clone LSTM weights
+    git clone --depth=1 --branch example_weights https://github.com/ciroh-ua/lstm.git /lstm_weights
+    # Replace relative paths with absolute paths in model config files
+    shopt -s globstar
+    sed -i 's|\.\.|/ngen/ngen/extern/lstm|g' /lstm_weights/trained_neuralhydrology_models/**/config.yml
+
+    # Replace the noaa-owp example weights with jmframes
+    rm -rf /ngen/ngen/extern/lstm/trained_neuralhydrology_models
+    cp -r /lstm_weights/trained_neuralhydrology_models /ngen/ngen/extern/lstm/trained_neuralhydrology_models
+
+    # Make everything in /ngen accessible
+    chmod -R 755 /ngen
+
+    # Set permissions for critical directories and files
+    chmod -R 755 /dmod
+    chmod -R 755 /usr/local/bin
+    chmod -R 755 /ngen/.venv
+
+    # Ensure specific files are executable
+    chmod 755 /ngen/HelloNGEN.sh
+    chmod 755 /dmod/bin/*
+    chmod 755 /usr/local/bin/ngen
+
+%files
+    templates/guide/HelloNGEN.sh /ngen/HelloNGEN.sh
+
+%runscript
+    export PATH=$OMPI_DIR/bin:$PATH
+    export LD_LIBRARY_PATH=$OMPI_DIR/lib:$LD_LIBRARY_PATH
+    export MANPATH=$OMPI_DIR/share/man:$MANPATH
+    exec /ngen/HelloNGEN.sh "$@"
