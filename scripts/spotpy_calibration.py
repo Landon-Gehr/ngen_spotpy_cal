@@ -136,9 +136,9 @@ def parse_args():
     non_opt_args = path_args + non_path_args
     for arg in non_opt_args:
         if arg["default"] != None:
-            parser.add_argument(f"--{arg["name"]}", type=arg["type"], default=arg["default"], help=arg["help"])
+            parser.add_argument(f"--{arg['name']}", type=arg["type"], default=arg["default"], help=arg["help"])
         else:
-            parser.add_argument(f"--{arg["name"]}", type=arg["type"], required=True, help=arg["help"])
+            parser.add_argument(f"--{arg['name']}", type=arg["type"], required=True, help=arg["help"])
     args, _ = parser.parse_known_args()
     tasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE", 1)
     run_path = os.path.join(args.workdir_path,"run")
@@ -167,7 +167,7 @@ def parse_args():
 
     opt_args = optional_path_args + optional_non_path_args
     for arg in opt_args:
-        parser.add_argument(f"--{arg["name"]}", type=arg["type"], default=arg["default"], help=arg["help"])
+        parser.add_argument(f"--{arg['name']}", type=arg["type"], default=arg["default"], help=arg["help"])
 
     flag_args = [
         {"name": "no-auto-bind",    "const": True, "default": False, "help": "Disable auto binding to singularity. Omit = False, bare flag = True, explicit true/false also accepted"},
@@ -177,7 +177,7 @@ def parse_args():
     ]
 
     for arg in flag_args:
-        parser.add_argument(f"--{arg["name"]}",nargs="?",const=arg["const"],default=arg["default"], help=arg["help"])
+        parser.add_argument(f"--{arg['name']}",nargs="?",const=arg["const"],default=arg["default"], help=arg["help"])
 
     
     args = parser.parse_args()
@@ -242,6 +242,7 @@ def directories_setup(args, rank):
     if args.no_auto_bind == False:
         args.image_config_path = os.path.join(args.image_data_path,"config")
         args.image_forcing_path = os.path.join(args.image_data_path,"forcings","forcings.nc")
+        # args.image_forcing_path = os.path.join(args.image_data_path,"forcings")
         args.realization_image_path = os.path.join(args.image_input_path, "realization.json")
         args.routing_image_path = os.path.join(args.image_input_path, "routing.yaml")
         args.gpkg_file = os.path.basename(args.gpkg_file_path)
@@ -256,7 +257,6 @@ def directories_setup(args, rank):
             f",{args.singularity_run_script}:{args.image_runscript_path}:ro"
         )
         args.bind = binds
-
 
 class NgenRun():
     def __init__(self, args):
@@ -352,7 +352,7 @@ class NgenRun():
 
         
         run_dir = os.path.abspath(self.args.rank_dir)
-        self.logger.debug(f"running ngen '{" ".join(ngen_command)}' from working directory {run_dir}")
+        self.logger.debug(f"running ngen {' '.join(ngen_command)} from working directory {run_dir}", flush=True)
         try:
             start = time.time()
             subprocess.run(ngen_command, check=True)
@@ -360,7 +360,7 @@ class NgenRun():
             self.args.timings += [self.args.runtime]
             # self.args.average_runtime = np.mean(self.args.timings)
             self.args.average_runtime = self.args.average_runtime + (self.args.runtime - self.args.average_runtime)/self.args.trial_num
-            self.args.logger.info(f"subprocess with {self.args.ngen_parallel} cpus finished in {self.args.runtime} seconds (avg: {self.args.average_runtime})")
+            self.args.logger.info(f"subprocess with {self.args.ngen_parallel} cpus finished in {self.args.runtime} seconds (avg: {self.args.average_runtime})", flush=True)
             self.args.logger.info(f"timings: {self.args.timings}")
         except Exception as e:
             traceback.print_exc()
@@ -423,7 +423,7 @@ class SpotPySetup:
             self.ngen.run_ngen()
             dt = datetime.strptime(self.args.start_time, "%Y-%m-%d %H:%M:%S")
             filename = dt.strftime("troute_output_%Y%m%d%H%M") + ".nc"
-            ds = xr.open_dataset(os.path.join(self.args.troute_output_path, filename))
+            ds = xr.open_dataset(os.path.join(self.args.troute_output_path, filename), engine="netcdf4")
             sim_res = ds['flow'].sel(feature_id=self.args.feature_id).values
             # sim_res = ds['flow'].sel(feature_id=self.args.feature_id).values * 35.3147 # 35.3147 ft^3/s == 1.0 m^3/s
             self.logger.debug(f"sim len {sim_res.shape}")
@@ -460,13 +460,24 @@ class SpotPySetup:
                 self.logger.info(f"new best {self.best}: {params}")
 
                 self.args.best_dict = {
-                    "site":self.args.site_name,
-                    "gage_id":self.args.gage_id,
-                    "feature_id":self.args.feature_id,
-                    "params":dict((params[1],params[0]))
+                    "site": self.args.site_name,
+                    "gage_id": self.args.gage_id,
+                    "feature_id": self.args.feature_id,
+                    "simulation": {
+                        "start": self.args.start_time,
+                        "end": self.args.end_time
+                    },
+                    "evaluation": {
+                        "start": self.args.eval_start_time,
+                        "end": self.args.eval_end_time
+                    },
+                    "kge": kge,
+                    "params": dict(zip(params[1], params[0]))
                 }
 
-                with open(os.path.join(self.args.best_save_dir,f"best_params_{self.args.gage_id}.json"), "w") as f:
+                Path(self.args.best_save_dir).mkdir(parents=True,exist_ok=True)
+                best_save_path = os.path.join(self.args.best_save_dir,f"best_params_{self.args.gage_id}.json")
+                with open(best_save_path, "w") as f:
                     json.dump(self.args.best_dict, f,indent=4)
 
                 plt.figure()

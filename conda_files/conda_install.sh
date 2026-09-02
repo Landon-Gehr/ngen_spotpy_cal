@@ -108,6 +108,7 @@ if [[ "$skip_install" == "false" ]]; then
         scipy \
         pandas \
         xarray \
+        netcdf4 \
         matplotlib \
         pyyaml \
         requests \
@@ -125,6 +126,7 @@ import numpy
 import scipy
 import pandas
 import xarray
+import netCDF4
 import matplotlib
 import yaml
 import requests

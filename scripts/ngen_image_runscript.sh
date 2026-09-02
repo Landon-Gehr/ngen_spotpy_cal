@@ -16,6 +16,7 @@ run_command="$model_binary $singularity_gpkg_file all $singularity_gpkg_file all
 if [[ "$verbosity" == "debug" ]]; then
     echo "[rank $rank] running with workers $num_partitions ngen sim: $run_command"
     time $run_command
+    echo "[rank $rank] simulation finished"
 elif [[ "$verbosity" == "info" ]]; then
     echo "[rank $rank] running with workers $num_partitions ngen sim: $run_command"
     time $run_command > /dev/null 2>&1
